@@ -1,10 +1,10 @@
 <script lang="ts">
   import type {
     TableColumnData,
-    TableRecord,
+    TableRecordData,
     ColumnPosition,
     GroupIndex,
-    GroupData,
+    ActiveCell,
   } from '@mathesar/stores/tableData';
   import {
     GROUP_ROW_HEIGHT,
@@ -17,13 +17,14 @@
 
   export let id: number;
   export let columns: TableColumnData;
-  export let data: TableRecord[];
-  export let groupData: GroupData;
+  export let records: TableRecordData;
+
   export let columnPosition: ColumnPosition;
   export let scrollOffset = 0;
   export let horizontalScrollOffset = 0;
   export let groupIndex: GroupIndex;
   export let selected: Record<string | number, boolean>;
+  export let activeCell: ActiveCell;
 
   let rowWidth: number;
   let widthWithPadding: number;
@@ -51,7 +52,7 @@
 
   function getItemSize(index: number) {
     const defaultRowHeight = 30;
-    if (data[index]?.__groupInfo) {
+    if (records.data[index]?.__groupInfo) {
       return GROUP_ROW_HEIGHT + defaultRowHeight;
     }
     return defaultRowHeight;
@@ -59,6 +60,11 @@
 
   function getItemKey(index: number): number | string {
     // Check and return primary key
+    // For this to work, order should be by primary key, and rows should not be duplicated!
+    // if (typeof records.data[index]?.[columns.primaryKey] !== 'undefined') {
+    //   return `__pk_${records.data[index][columns.primaryKey] as string}`;
+    // }
+
     // Return index by default
     return `__index_${index}`;
   }
@@ -84,7 +90,7 @@
         bind:horizontalScrollOffset
         {height}
         width={totalWidth || null}
-        itemCount={data.length}
+        itemCount={records.data.length}
         paddingBottom={100}
         itemSize={getItemSize}
         itemKey={getItemKey}
@@ -94,16 +100,18 @@
         {#each items as it (it?.key || it)}
           {#if it}
             <Row {columns} style={it.style}
-                  row={data[it.index] || {}}
+                  row={records.data[it.index] || {}}
                   index={it.index}
-                  {groupData}
-                  isGrouped={!!groupData}
+                  groupData={records.groupData}
+                  isGrouped={!!records.groupData}
                   {columnPosition}
-                  bind:selected/>
+                  bind:selected
+                  bind:activeCell
+                  on:cellUpdate/>
           {/if}
         {/each}
 
-        {#if groupData}
+        {#if records.groupData}
           <div class="group-padding"></div>
         {/if}
       </VirtualList>

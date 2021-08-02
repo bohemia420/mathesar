@@ -101,25 +101,22 @@ section.table-section .tab-container {
         .cell {
           position: absolute;
           display: block;
-          align-items: center;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          text-align: left;
           border-bottom: 1px solid #e7e7e7;
           border-right: 1px solid #efefef;
-          height: 100%;
           left: 0;
           top: 0;
+          bottom: 0;
 
           &.row-control {
             font-size: 12px;
+            padding: 7px 14px;
             color: #959595;
             left: 0;
             position: sticky;
             z-index: 10;
             display: inline-flex;
             align-items: center;
+            height: 100%;
 
             .checkbox {
               display: none;
@@ -228,14 +225,64 @@ section.table-section .tab-container {
 
           .cell {
             user-select: none;
-            padding: 7px 14px;
             background: #fff;
+            overflow: hidden;
 
-            .skeleton {
+            .content {
+              position: absolute;
+              left: 0;
+              right: 0;
+              top: 0;
+              bottom: 0;
+              padding: 7px 14px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+
+              .empty {
+                color: #9f9f9f;
+              }
+            }
+
+            .loading {
+              position: absolute;
               top: 6px;
               left: 15px;
               right: 15px;
               bottom: 6px;
+              background: #efefef;
+            }
+
+
+            &.is-active {
+              z-index: 5;
+              background: #fff !important;
+              box-shadow: 0 0 0 2px #428af4;
+              border-radius: 2px;
+              border: none;
+              bottom: 1px;
+
+              &.edit-cell {
+                box-shadow: 0 0 0 3px #428af4;
+              }
+
+              .editbox {
+                border: none;
+                outline: 0;
+                margin: 0;
+                padding: 6px 14px;
+                line-height: inherit;
+                font-family: inherit;
+                font-size: inherit;
+                display: block;
+                background: #fff;
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 2px;
+                width: 100%;
+              }
             }
           }
 

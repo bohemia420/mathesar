@@ -80,6 +80,10 @@ export function deleteAPI<T>(url: string): CancellablePromise<T> {
   return sendXHRRequest('DELETE', url);
 }
 
+export function patchAPI<T>(url: string, data: unknown): CancellablePromise<T> {
+  return sendXHRRequest('PATCH', url, data);
+}
+
 export function uploadFile<T>(
   url: string | URLObject,
   formData: FormData,

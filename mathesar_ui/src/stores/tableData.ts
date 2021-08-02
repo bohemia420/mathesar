@@ -1,5 +1,10 @@
 import { get, writable, Writable } from 'svelte/store';
-import { deleteAPI, getAPI, States } from '@mathesar/utils/api';
+import {
+  deleteAPI,
+  patchAPI,
+  getAPI,
+  States,
+} from '@mathesar/utils/api';
 import type { CancellablePromise } from '@mathesar/components';
 import type { SelectOption } from '@mathesar-components/types';
 
@@ -55,7 +60,7 @@ export interface GroupData {
   [key: string]: GroupData | number
 }
 
-interface TableRecordData {
+export interface TableRecordData {
   state: States,
   error?: string,
   data: TableRecord[],
@@ -90,11 +95,17 @@ export type ColumnPosition = Map<string, {
   left: number
 }>;
 
-export type GroupIndex = {
+export interface GroupIndex {
   latest: number,
   previous: number,
   bailOutOnReset: boolean
-};
+}
+
+export interface ActiveCell {
+  rowIndex: number,
+  column: string,
+  type: 'select' | 'edit'
+}
 
 export interface TableDisplayStores {
   scrollOffset: Writable<number>,
@@ -102,12 +113,14 @@ export interface TableDisplayStores {
   columnPosition: Writable<ColumnPosition>,
   groupIndex: Writable<GroupIndex>,
   showDisplayOptions: Writable<boolean>,
-  selected: Writable<Record<string | number, boolean>>
+  selected: Writable<Record<string | number, boolean>>,
+  activeCell: Writable<ActiveCell>
 }
 
 interface TableConfigData {
   previousTableRequest?: CancellablePromise<TableColumnsResponse>,
   previousRecordRequestSet?: Set<CancellablePromise<TableRecordsResponse>>,
+  previousUpdateRequestMap?: Map<string, CancellablePromise<unknown>>
 }
 
 export type TableColumnStore = Writable<TableColumnData>;
@@ -266,7 +279,6 @@ export async function fetchTableRecords(
     const existingData = get(tableRecordStore);
     const optionData = get(optionStore);
 
-    // const requestedOffset = optionData.pageSize * (optionData.page - 1);
     const requestedOffset = optionData.offset;
     let offset: number = null;
     let limit: number = null;
@@ -327,9 +339,9 @@ export async function fetchTableRecords(
       // Limit should have already been set here.
     }
 
-    // If reloaded, set all other elements to null
+    // If reloaded, set all elements to null
+    // Rethink for inplace updates vs full updates
     if (reload) {
-      existingData.data.length = offset + limit;
       existingData.data.fill(null);
     }
 
@@ -347,11 +359,12 @@ export async function fetchTableRecords(
       }
     }
 
-    tableRecordStore.set({
-      ...existingData,
-      state: States.Loading,
-      error: null,
-    });
+    // Rethink this
+    // tableRecordStore.set({
+    //   ...existingData,
+    //   state: States.Loading,
+    //   error: null,
+    // });
 
     const params = [];
     params.push(`limit=${limit}`);
@@ -509,6 +522,7 @@ export function getTable(db: string, id: number, options?: Partial<TableOptionsD
         }),
         showDisplayOptions: writable(false),
         selected: writable({}),
+        activeCell: writable(null as ActiveCell),
       },
       config: {},
     };
@@ -562,26 +576,28 @@ export async function deleteRecords(db: string, id: number, pks: string[]): Prom
       await Promise.all(promises);
       await fetchTableRecords(db, id, true);
 
-      // Getting again, since data may have changed
-      const recordData = get(tableRecordStore);
-      const newData: TableRecord[] = [];
-      recordData.data.forEach((entry) => {
-        if (entry) {
-          const entryPK = entry[columnData.primaryKey]?.toString();
-          if (failed.has(entryPK)) {
-            newData.push({
-              ...entry,
-              __state: 'deletionFailed',
-            });
+      if (failed.size > 0) {
+        // Getting again, since data may have changed
+        const recordData = get(tableRecordStore);
+        const newData: TableRecord[] = [];
+        recordData.data.forEach((entry) => {
+          if (entry) {
+            const entryPK = entry[columnData.primaryKey]?.toString();
+            if (failed.has(entryPK)) {
+              newData.push({
+                ...entry,
+                __state: 'deletionFailed',
+              });
+            }
           }
-        }
-        newData.push(entry);
-      });
+          newData.push(entry);
+        });
 
-      tableRecordStore.set({
-        ...recordData,
-        data: newData,
-      });
+        tableRecordStore.set({
+          ...recordData,
+          data: newData,
+        });
+      }
     } catch (err) {
       const recordData = get(tableRecordStore);
       const newData = existingData.data.map((entry) => {
@@ -600,6 +616,34 @@ export async function deleteRecords(db: string, id: number, pks: string[]): Prom
       });
     } finally {
       table.display.selected.set({});
+    }
+  }
+}
+
+export async function updateRecord(db: string, id: number, row: TableRecord): Promise<void> {
+  const table = databaseMap.get(db)?.get(id);
+  if (table) {
+    const tableColumnStore = table.columns;
+    const columnData = get(tableColumnStore);
+
+    if (columnData.primaryKey && row[columnData.primaryKey]) {
+      const pk = row[columnData.primaryKey]?.toString();
+
+      const existingUpdatePromise = table.config.previousUpdateRequestMap?.get(pk);
+      existingUpdatePromise?.cancel();
+
+      try {
+        const updatePromise = patchAPI<unknown>(`/tables/${id}/records/${pk}/`, row);
+        if (!table.config.previousUpdateRequestMap) {
+          table.config.previousUpdateRequestMap = new Map();
+        }
+        table.config.previousUpdateRequestMap.set(pk, updatePromise);
+        await updatePromise;
+      } catch (err) {
+        // Update status, with a separate status manager
+      } finally {
+        table.config.previousUpdateRequestMap?.delete(pk);
+      }
     }
   }
 }

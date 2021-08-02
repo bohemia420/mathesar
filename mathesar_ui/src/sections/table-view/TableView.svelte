@@ -4,6 +4,7 @@
     getTable,
     fetchTableRecords,
     deleteRecords,
+    updateRecord,
   } from '@mathesar/stores/tableData';
   import URLQueryHandler from '@mathesar/utils/urlQueryHandler';
   import type {
@@ -11,6 +12,8 @@
     TableRecordStore,
     TableOptionsStore,
     TableDisplayStores,
+    TableRecord,
+    TableColumn,
   } from '@mathesar/stores/tableData';
   import ActionsPane from './actions-pane/ActionsPane.svelte';
   import DisplayOptions from './display-options/DisplayOptions.svelte';
@@ -44,6 +47,7 @@
   let groupIndex: TableDisplayStores['groupIndex'];
   let showDisplayOptions: TableDisplayStores['showDisplayOptions'];
   let selected: TableDisplayStores['selected'];
+  let activeCell: TableDisplayStores['activeCell'];
 
   let animateOpts = false;
 
@@ -57,11 +61,13 @@
     options = table.options;
 
     columnPosition = table.display.columnPosition;
+    // TODO: Restructure layout to avoid offset syncing overhead
     horizontalScrollOffset = table.display.horizontalScrollOffset;
     scrollOffset = table.display.scrollOffset;
     groupIndex = table.display.groupIndex;
     showDisplayOptions = table.display.showDisplayOptions;
     selected = table.display.selected;
+    activeCell = table.display.activeCell;
 
     animateOpts = false;
     idKey = _id;
@@ -120,6 +126,19 @@
       void deleteRecords(database, identifier, selectedEntries);
     }
   }
+
+  function onCellUpdate(e: {
+    detail: {
+      row: TableRecord,
+      index: number,
+      column: TableColumn,
+    },
+  }) {
+    const { row } = e.detail;
+    const newRow = { ...row };
+    delete newRow.__state;
+    void updateRecord(database, identifier, newRow);
+  }
 </script>
 
 <ActionsPane {columns} {records} {options} {selectedEntries}
@@ -150,15 +169,18 @@
               bind:horizontalScrollOffset={$horizontalScrollOffset}
               on:reload={reload}/>
 
-      <Body bind:this={tableBodyRef} id={idKey}
-            columns={$columns} data={$records.data}
-            groupData={$records.groupData}
+      <Body bind:this={tableBodyRef}
+            id={idKey}
+            columns={$columns}
+            records={$records}
             groupIndex={$groupIndex}
             columnPosition={$columnPosition}
             bind:selected={$selected}
             bind:scrollOffset={$scrollOffset}
             bind:horizontalScrollOffset={$horizontalScrollOffset}
-            on:refetch={refetch}/>
+            bind:activeCell={$activeCell}
+            on:refetch={refetch}
+            on:cellUpdate={onCellUpdate}/>
     {/if}
   </div>
 </div>
